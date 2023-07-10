@@ -194,4 +194,108 @@ xttest3
 ssc install xtscc
 xtscc $ylist $xlist, fe
 
+////////////////// PART 2 //////////////////////////
 
+ssc install estout
+
+* Check for endogeneity using 2SLS WITHOUT instruments
+ivregress 2sls $ylist $xlist
+
+* Check for endogeneity using 2SLS WITH instruments
+** When instrument is lag of income
+ivregress 2sls logpt_cost urban nfm log_income children children_older (log_crops = l.log_income l.nfm l.urban l.children l.children_older)
+** We assume that the lag of the log_income nfm urban and children as the instruments that affect log_crops
+
+* Check the instruments
+estat endog
+estat firststage
+estat overid
+
+*Save the results of 2SLS
+eststo two_sls
+
+* Check for endogeneity using IV WITH instruments
+ivreg logpt_cost urban nfm log_income children children_older (log_crops = l.log_income l.nfm l.urban l.children)
+
+*Save the results of IV
+eststo IV
+
+* Now let's check the results of simple OLS and compare it with 2SLS and IV
+reg logpt_cost urban nfm log_income children children_older log_crops
+
+*Save the results of OLS
+eststo OLS
+
+*Compare the results:
+
+estout
+
+*** The results with instrumental methods are close to each other, while the results with OLS differ much
+
+* Now, let's check the instruments with 2SLS
+ivregress 2sls logpt_cost urban nfm log_income children children_older (log_crops = l.log_income l.nfm l.urban l.children l.children_older)
+** We check the following instruments: lag of the log_income nfm urban and children 
+
+* Check the instruments
+estat endog
+estat firststage
+estat overid
+
+* Let's choose time invariant regressor. Let this vartiable be a place where respondent live (urban)
+** Check for FE regression
+xtreg logpt_cost log_income log_crops nfm urban children children_older, fe 
+** Save results
+est store FE
+
+** Check for RE regression
+xtreg logpt_cost log_income log_crops nfm urban children children_older, re 
+** Save results
+eststo RE
+
+** Apply Hausmann-Taylor regression
+xthtaylor logpt_cost log_income log_crops nfm urban children children_older, endog(log_crops) 
+** Save results
+eststo HT
+
+estout
+
+** Check for kernel density
+kdensity logpt_cost 
+kdensity urban 
+kdensity nfm 
+kdensity log_income 
+kdensity children 
+kdensity children_older 
+kdensity log_crops
+
+*Make the panel data balanced
+xtset $id $t
+tsfill, full
+
+* Clear all the missing data and replace them with 0 values
+mvencode nfm logpt_cost log_income log_crops urban children children_older, mv(0) override
+
+** Check for unit roots and stationarity
+xtunitroot ips logpt_cost, demean
+xtunitroot ips log_income, demean
+xtunitroot ips log_crops, demean
+xtunitroot ips nfm, demean
+xtunitroot ips urban, demean
+xtunitroot ips children, demean
+xtunitroot ips children_older, demean
+
+** Check for cointegration (works with Stata 15 and later)
+xtcointtest kao logpt_cost log_income log_crops nfm urban children children_older 
+
+//////////////////////////////////
+
+* Now let's check for dynamic model
+
+** Perform the Arelano-Bond model
+ssc install xtabond2
+
+*********
+xtabond2 logpt_cost log_income log_crops nfm urban children children_older, gmm(l.log_crops) nocons twostep small
+est store ab2c
+ 
+estout
